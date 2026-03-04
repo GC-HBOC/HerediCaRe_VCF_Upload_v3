@@ -10,8 +10,7 @@ class VCF:
         self.BOGEN_NR = None # MGU Bogennr, Teil 3 des Dateinamens
         self.ERFMIT = None # interne Mitarbeite-ID, Teil 4 des Dateinamens
         self.ERFDAT = None # Zeitstempel des Uploads, Teil 5 des Dateinames
-        
-        self.processed = False
+
         self.header = [] # list of header lines 
         VARIANT_HEADER = ['chrom', 'pos_hg38', 'ref_hg38', 'alt_hg38', 'pos_hg19', 'ref_hg19', 'alt_hg19', 'gene',  'transcript', 'hgvsc', 'hgvsp', 'effect', 'annotation', 'class', 'gt', 'norm_fail', 'ref_fail', 'liftover_fail']
         self.variants = pd.DataFrame(columns=VARIANT_HEADER)
@@ -154,3 +153,40 @@ class VCF:
                             if CHAIN_FLAG and REF_POS >= POS:
                                 CHAIN_FLAG =False
 
+
+    def write_sql_output(self, outpath):
+
+        LINE_PREFIX = "into VCF_UPLOAD (MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT,GEN2,REFSEQ,HGVS_DNA,HGVS_PROT,ART,PATH,CHROM,POS_HG19,REF_HG19,ALT_HG19,POS_HG38,REF_HG38,ALT_HG38,ZYGOT) values"
+        with open(outpath, 'w') as outfile:
+            
+            outfile.write("Insert all\n")
+
+            ## REF check failed
+            if self.variants['ref_fail'].any():
+                _ind = self.variants.loc[self.variants['ref_fail'] == True].index[0]
+                if self.hg38:
+                    _var = '-'.join([self.variants.loc[_ind,'chrom'], self.variants.loc[_ind,'pos_hg38'],self.variants.loc[_ind,'ref_hg38'], self.variants.loc[_ind,'alt_hg38'] ])
+                else:
+                    _var = '-'.join([self.variants.loc[_ind,'chrom'], self.variants.loc[_ind,'pos_hg19'],self.variants.loc[_ind,'ref_hg19'], self.variants.loc[_ind,'alt_hg19'] ])
+                OUT = "into VCF_UPLOAD (MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT,GEN2,HGVS_DNA) values ("
+                OUT += ','.join([self.MEMBER_ID, self.BOGEN_NR, self.ERFMIT, self.ERFDAT, "\'STATUS\'", "\'Reference check failed for variant " + _var + "\'"]) + ')\n'
+                outfile.write(OUT)
+            
+            ## there are variants to report!! Yippiie!!
+            elif len(self.variants.loc[(self.variants['norm_fail'] == False) & (self.variants['liftover_fail'] == False) & (self.variants['gene'].notna()) ]):
+                pass
+
+            else:
+                if self.hg38:
+                    _var = '-'.join([self.variants.loc[_ind,'chrom'], self.variants.loc[_ind,'pos_hg38'],self.variants.loc[_ind,'ref_hg38'], self.variants.loc[_ind,'alt_hg38'] ])
+                else:
+                    _var = '-'.join([self.variants.loc[_ind,'chrom'], self.variants.loc[_ind,'pos_hg19'],self.variants.loc[_ind,'ref_hg19'], self.variants.loc[_ind,'alt_hg19'] ])
+                OUT = "into VCF_UPLOAD (MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT,GEN2,HGVS_DNA) values ("
+                OUT += ','.join([self.MEMBER_ID, self.BOGEN_NR, self.ERFMIT, self.ERFDAT, "\'STATUS\'", "\'No valid variants to report\'"]) + ')\n'
+                outfile.write(OUT)
+
+
+
+
+            outfile.write("select * from dual;\n")
+            outfile.write("commit;\n")

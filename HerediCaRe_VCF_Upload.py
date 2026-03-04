@@ -12,7 +12,7 @@ SRC_DIR = os.path.dirname(os.path.realpath(__file__))
 
 parser = argparse.ArgumentParser()
 parser.add_argument("input_folder", help="Path to folder with VCF files to parse")
-parser.add_argument("-o", "--output_folder", default="Output", help="Output  folder  for  final  .txt  files  (default: Output)")
+parser.add_argument("-o", "--output_folder", default=SRC_DIR + '\\' +"Output", help="Output  folder  for  final  .txt  files  (default: Output)")
 parser.add_argument("-sp", default=SRC_DIR + '\\' + r"resources\snpEff\snpEff.jar", help=r"Path to snpEff .jar (default: resources\snpEff\snpEff.jar)")
 parser.add_argument("-jp", default='java', help="Path to java executable for running snpEff (default: java)") # "O:\microsoft-jdk-25.0.2-windows-x64\jdk-25.0.2+10\bin\java.exe" (MHH) or "V:\Bioinformatik\software\jdk-25.0.1.8-hotspot\bin\java.exe" (FBZ)
 parser.add_argument("-d", "--debug_folder", default="Debug", help="Debug Folder. Contains processed, erroneous & normalized VCFs + Rejected Variants TSV file (default: Debug)")
@@ -272,4 +272,7 @@ for VCF_FILE in VCFS:
                             #TODO variant not found or doubled
             vcf.variants.to_csv('test.tsv', sep='\t', index=False)
             print(vcf.variants)
+
+            os.makedirs(args.output_folder, exist_ok=True)
+            vcf.write_sql_output(args.output_folder + '/' + VCF_FILE + '.txt')
 
