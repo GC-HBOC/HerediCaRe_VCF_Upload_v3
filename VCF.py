@@ -75,7 +75,7 @@ class VCF:
         # TODO: reverse query sequence in chain specification
         
         SRC_DIR = os.path.dirname(os.path.realpath(__file__))
-        CHAIN_FILE = SRC_DIR + '\\' + 'resources/hg38ToHg19.over.chain' if self.hg38 else SRC_DIR + '\\' + r'resources\hg19ToHg38.over.chain'
+        CHAIN_FILE = SRC_DIR + '\\' + 'resources/hg38ToHg19.over.chain' if self.hg38 else SRC_DIR + '\\' + r'resources/hg19ToHg38.over.chain'
         
         for i in range(len(self.variants)):
             if self.hg38:
@@ -177,13 +177,14 @@ class VCF:
                 pass
 
             else:
-                if self.hg38:
-                    _var = '-'.join([self.variants.loc[_ind,'chrom'], self.variants.loc[_ind,'pos_hg38'],self.variants.loc[_ind,'ref_hg38'], self.variants.loc[_ind,'alt_hg38'] ])
-                else:
-                    _var = '-'.join([self.variants.loc[_ind,'chrom'], self.variants.loc[_ind,'pos_hg19'],self.variants.loc[_ind,'ref_hg19'], self.variants.loc[_ind,'alt_hg19'] ])
-                OUT = "into VCF_UPLOAD (MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT,GEN2,HGVS_DNA) values ("
-                OUT += ','.join([self.MEMBER_ID, self.BOGEN_NR, self.ERFMIT, self.ERFDAT, "\'STATUS\'", "\'No valid variants to report\'"]) + ')\n'
-                outfile.write(OUT)
+                pass
+#                if self.hg38:
+#                    _var = '-'.join([self.variants.loc[_ind,'chrom'], self.variants.loc[_ind,'pos_hg38'],self.variants.loc[_ind,'ref_hg38'], self.variants.loc[_ind,'alt_hg38'] ])
+#                else:
+#                    _var = '-'.join([self.variants.loc[_ind,'chrom'], self.variants.loc[_ind,'pos_hg19'],self.variants.loc[_ind,'ref_hg19'], self.variants.loc[_ind,'alt_hg19'] ])
+#                OUT = "into VCF_UPLOAD (MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT,GEN2,HGVS_DNA) values ("
+#                OUT += ','.join([self.MEMBER_ID, self.BOGEN_NR, self.ERFMIT, self.ERFDAT, "\'STATUS\'", "\'No valid variants to report\'"]) + ')\n'
+#                outfile.write(OUT)
 
 
 

@@ -7,6 +7,7 @@ import chardet
 import subprocess
 from VCF import VCF
 import re
+import fastapy
 
 SRC_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -34,11 +35,6 @@ with open(args.transcript_tsv) as infile:
         else:
             sys.stderr.write('Could not parse line ' + str(c) + ': ' + line.rstrip() + '\n' )
         c+=1
-#print(TRANSCRIPTS)
-
-#from easyfasta import load_fasta
-import fastapy
-#import easyfasta
 
 sys.stderr.write('... reading reference FASTA files.\n')
 hg38records = fastapy.parse(os.path.dirname(os.path.realpath(__file__)) + '\\' + r'resources\ref\GRCh38_GIABv3_no_alt_analysis_set_maskedGRC_decoys_MAP2K3_KMT2C_KCNJ18.fasta.gz')
@@ -270,7 +266,7 @@ for VCF_FILE in VCFS:
                         else:
                             pass
                             #TODO variant not found or doubled
-            vcf.variants.to_csv('test.tsv', sep='\t', index=False)
+            #vcf.variants.to_csv('test.tsv', sep='\t', index=False)
             print(vcf.variants)
 
             os.makedirs(args.output_folder, exist_ok=True)
