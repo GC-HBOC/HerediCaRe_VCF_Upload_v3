@@ -90,8 +90,8 @@ for VCF_FILE in VCFS:
             vcf = VCF(False)
             #normalize_vcf(os.path.join(args.input_folder, VCF), hg19_dict, HG38_FLAG)
 
-            ### further infos required for SQL output
-
+        ### further infos required for SQL output
+        vcf.VCF_NAME = VCF_FILE
         vcf.MEMBER_ID = VCF_FILE.split('-')[1]
         vcf.BOGEN_NR = VCF_FILE.split('-')[2]
         vcf.ERFMIT =  VCF_FILE.split('-')[3]
@@ -99,7 +99,7 @@ for VCF_FILE in VCFS:
 
 
 
-        
+        VAR_COUNTER = 0
         with open(os.path.join(args.input_folder, VCF_FILE), encoding=chardet.detect(rawdata)['encoding']) as infile:
             FAIL_FLAG = False
             for _l in infile:
@@ -109,6 +109,7 @@ for VCF_FILE in VCFS:
                         vcf.header.append(line)
                         #try:
                     else:
+                        VAR_COUNTER +=1
                         ll = line.rstrip().split('\t')
                         if len(ll) not in [8, 10]:
                             sys.stderr.write('...invalid number of columns in VCF file ' + VCF_FILE + ': ' + str(len(ll)) + '\n')
@@ -117,7 +118,7 @@ for VCF_FILE in VCFS:
                         try:
                             CHROM, POS, REF, ALT, INFO = ll[0], ll[1], ll[3], ll[4], ll[7]
                         except:
-                            print(ll)
+                            sys.stderr.write('... can not parse: ' + line)
                         #Es besteht für Nutzerinnen und Nutzer die Möglichkeit, zusätzliche Informationen zur Klassifizierung der Pathogenität von Varianten in der INFO-Spalte 
                         #(Spalte 8) mithilfe der Schlagworte MutDB:Classification, CLASS oder MT zu hinterlegen Sind mehrere dieser Einträge für die selbe Variante vorhanden, 
                         # wird der MUtDB:Classification-Eintrag vor allen anderen und der CLASS-Eintrag vor dem MT-Eintrag priorisiert.
@@ -141,7 +142,6 @@ for VCF_FILE in VCFS:
                         
                         ## split variant in single-ALT variants
                         if not FAIL_FLAG:
-                            print(ll)
                             # [1] Mitochondrial variants are ignored & prefix chr are removed (chr1 --> 1)
                             if CHROM.startswith('chr') or CHROM.startswith('Chr'): CHROM = CHROM[3:]
                             if CHROM == "23": CHROM = "X"
@@ -152,7 +152,6 @@ for VCF_FILE in VCFS:
                                     if _ALT not in ['.', '*']:
                                         GT = ll[9].split(':')[0].count(str(i+1)) if len(ll)>8 else None
                                         varclass = ANNOT.split(',')[i] if len(ANNOT) else None
-                                        print(VCF_FILE, CHROM, POS, REF, ALT, _ALT, GT, ANNOT_TAG, varclass )
                                         # ['chrom', 'pos_hg38', 'ref_hg38', 'alt_hg38', 'pos_hg19', 'ref_hg19', 'alt_hg19', 'gene',  'transcript', 'hgvsc', 'hgvsp', 'effect', 'annotation', 'class', 'gt', 'norm_fail', 'ref_fail', 'liftover_fail']
                                         if HG38_FLAG:
                                             ## TODO REF check
@@ -162,9 +161,6 @@ for VCF_FILE in VCFS:
                                             else:
                                                 VAR = [CHROM, POS, REF, _ALT, None, None, None, None, None, None, None, None, ANNOT_TAG, varclass, GT, None, True, None]
                                         else:
-                                            print('checking hg19:', CHROM, POS, REF, ALT)
-                                            print(int(POS)-1, int(POS)+len(REF)-1)
-                                            print(hg19_dict[CHROM][int(POS)-1:int(POS)+len(REF)-1].upper())
                                             if REF.upper() == hg19_dict[CHROM][int(POS)-1:int(POS)+len(REF)-1].upper():
                                                 VAR = [CHROM, None, None, None, POS, REF, _ALT, None, None, None, None, None, ANNOT_TAG, varclass, GT, None, False, None]
                                             else:
@@ -172,28 +168,19 @@ for VCF_FILE in VCFS:
                                         vcf.variants.loc[len(vcf.variants)] = VAR
                                     else:
                                         sys.stderr.write("Variant with ALT " + _ALT + " at " + CHROM + ':' + str(POS) + ' is ignored\n')
-                        #if ',' in ALT:
-                        #    print('XXX', line)
-                        #    # XXX 1   109792734       .       A       AACG,AC .       .       .       GT      1/2
-                             # XXX 12  121434630       .       C       CC,CTCATTCAT    .       .       .       GT      1/2
-                                
-                        #except:
-                        #    FAIL_FLAG = True
+
         print(vcf.variants)
         print('FAIL_FLAG:', FAIL_FLAG)
+        vcf.PARSE_N_IN_SOURCE =  VAR_COUNTER
         
         # set FAIL_FLAG if any ref_fail == True
-        if vcf.variants['ref_fail'].any(): 
-            print('FAILED!!!!') # TODO output 1st failed variant
-            print(vcf.variants['ref_fail'])
-            FAIL_FLAG = True
+        if vcf.variants['ref_fail'].any(): FAIL_FLAG = True
             
         ### NORMALIZATION
         if HG38_FLAG:
             vcf.normalize(hg38_dict)
         else:
             vcf.normalize(hg19_dict)
-        print('NORMALIZED')
         
         ### LIFTOVER
         if HG38_FLAG:
@@ -201,7 +188,6 @@ for VCF_FILE in VCFS:
         else:
             vcf.liftover(hg38_dict)
         #print(vcf.variants)
-
             
         if FAIL_FLAG:
             # Create the directory if it doesn't exist
@@ -224,48 +210,87 @@ for VCF_FILE in VCFS:
                     if vcf.variants.loc[i,'norm_fail'] == vcf.variants.loc[i,'ref_fail'] == False and (HG38_FLAG or vcf.variants.loc[i,'liftover_fail'] == False):
                         CHROM, POS, REF, ALT = 'chr' + vcf.variants.loc[i,'chrom'], str(vcf.variants.loc[i,'pos_hg38']), vcf.variants.loc[i,'ref_hg38'], vcf.variants.loc[i,'alt_hg38']
                         outfile.write('\n'+ '\t'.join([CHROM, POS, '.', REF, ALT, '.', '.', '.']) )
+            # run snpEff
             CMD = args.jp + ' -Xmx' + str(args.ram) + 'g -jar ' + args.sp + ' hg38 ' + 'tmp\\'  + VCF_FILE + '.tmp.vcf'
             #print(CMD)
             output = None
             try:
                 output = subprocess.check_output(CMD, shell=True, text=True)
+                sys.stderr.write('### running snpEff for', VCF_FILE)
+                ## XXX DEBUG
+                #subprocess.Popen(CMD + ' > snpeff_check\\' + VCF_FILE, shell=True ).wait()
                 #print(output)
             except:
-                sys.stderr.write('..Could not run ' + CMD + '\n')
+                sys.stderr.write('... Could not run ' + CMD + '\n')
             
             if output:
-                DEL_INDS = [] # store indices of variants not located within pre-defined transcripts
+                #DEL_INDS = [] # store indices of variants not located within pre-defined transcripts
+                IND_DICT = dict() # use dict to deal with variants located in different genes or transcripts 
                 for line in output.split('\n'):
                     if not line.startswith('#') and len(line.split('\t')) >= 8:
                         ll = line.split('\t')
-                        #print(ll)
-                        CHROM, POS, REF, ALT, INFO = ll[0][3:], int(ll[1]), ll[3], ll[4], ll[7]
-                        #print(CHROM, POS, REF, ALT)
+                        CHROM, POS, REF, ALT, INFO = ll[0][3:], ll[1], ll[3], ll[4], ll[7]
                         _inds = vcf.variants.index[(vcf.variants['chrom'] == CHROM) & (vcf.variants['pos_hg38'] == POS) & (vcf.variants['ref_hg38'] == REF) & (vcf.variants['alt_hg38'] == ALT)].tolist()
-                        print(_inds)
+
+
                         if len(_inds) == 1:
-                            ### NOTE: due to self-generated VCF input, ANN is the only entry in INFO column
-                            ANN = [_ for _ in INFO[4:].split(',') if (_.split('|')[6].split('.')[0] in TRANSCRIPTS.keys())]
-                            print(ANN)
-                            if len(ANN) == 1:
-                                # 'gene',  'transcript', 'hgvsc', 'hgvsp', 'effect',
-                                vcf.variants.loc[_inds[0], 'gene'] = ANN[0].split('|')[3]
-                                vcf.variants.loc[_inds[0], 'transcript'] = ANN[0].split('|')[6]
-                                vcf.variants.loc[_inds[0], 'hgvsc'] = ANN[0].split('|')[9]
-                                vcf.variants.loc[_inds[0], 'hgvsp'] = ANN[0].split('|')[10]
-                                vcf.variants.loc[_inds[0], 'effect'] = ANN[0].split('|')[1]
+                            ind = _inds[0]
+                            ### NOTE: due to self-generated VCF input, ANN is the only entry in INFO column 
+                            print(line)
+                            ANN = [_ for _ in INFO.split(';') if _.startswith('ANN=')][0]
+                            ANN = [_ for _ in ANN[4:].split(',') if (_.split('|')[6].split('.')[0] in TRANSCRIPTS.keys())]
+                            #print(ANN)
+                            for ann in ANN:
+                                _gene, _transcript = ann.split('|')[3], ann.split('|')[6]
+                                _hgvsc, _hgvsp, _eff = ann.split('|')[9], ann.split('|')[10], ann.split('|')[1]
+                                if ind not in IND_DICT.keys(): IND_DICT[ind] = dict()
+                                IND_DICT[ind][_gene] = (_transcript, _hgvsc, _hgvsp, _eff)
+                            #print(IND_DICT)
 
-
-
-                            
-                            elif len(ANN) > 1:
-                                #TODO add new line in vcf.variants
-                                pass
-                            else:
-                                DEL_INDS.append(_inds[0])
                         else:
-                            pass
-                            #TODO variant not found or doubled
+                            ## deal with variant found less or more than once in vcf.variants
+                            if not len(_inds):
+                                sys.stderr.write("Couldn't identify variant " + '-'.join([CHROM, str(POS), REF, ALT]) + " from snpEff Output\n")
+                            elif len(_inds) > 1:
+                                sys.stderr.write("Several entries of variant " + '-'.join([CHROM, str(POS), REF, ALT]) + " in normalized VCF input ... Ignoring this variant.\n")
+                                
+                            #TODO variant not found or doubled            
+                
+                print(IND_DICT)
+
+                ### treat variants located in different genes or transcripts
+                _N = len(vcf.variants)
+                for i in range(_N):
+                    if i in IND_DICT:
+                        ## ...otherwise variant is not in valid transcript from TRANSCRIPTS
+                        K = list(IND_DICT[i].keys())
+                        if len(K) == 1:
+                            vcf.variants.loc[i,'gene'] = K[0]
+                            vcf.variants.loc[i,'transcript'] = IND_DICT[i][K[0]][0]
+                            vcf.variants.loc[i,'hgvsc'] = IND_DICT[i][K[0]][1]
+                            if IND_DICT[i][K[0]][2]: vcf.variants.loc[i,'hgvsp'] = IND_DICT[i][K[0]][2]
+                            vcf.variants.loc[i,'effect'] = IND_DICT[i][K[0]][3]
+
+                        if len(K) > 1:
+                            vcf.variants.loc[i,'gene'] = K[0]
+                            vcf.variants.loc[i,'transcript'] = IND_DICT[i][K[0]][0]
+                            vcf.variants.loc[i,'hgvsc'] = IND_DICT[i][K[0]][1]
+                            if IND_DICT[i][K[0]][2]: vcf.variants.loc[i,'hgvsp'] = IND_DICT[i][K[0]][2]
+                            vcf.variants.loc[i,'effect'] = IND_DICT[i][K[0]][3]
+                            for g in K[1:]:
+                                _i = len(vcf.variants)
+                                row_to_copy = vcf.variants.loc[i].copy()
+                                vcf.variants.loc[_i] = row_to_copy
+                                vcf.variants.loc[_i,'gene'] = g
+                                vcf.variants.loc[_i,'transcript'] = IND_DICT[i][g][0]
+                                vcf.variants.loc[_i,'hgvsc'] = IND_DICT[i][g][1]
+                                if IND_DICT[i][g][2]: vcf.variants.loc[_i,'hgvsp'] = IND_DICT[i][g][2]
+                                vcf.variants.loc[_i,'effect'] = IND_DICT[i][g][3]
+
+
+
+                        #vcf.variants.loc[i,'REFSEQ']
+            
             #vcf.variants.to_csv('test.tsv', sep='\t', index=False)
             print(vcf.variants)
 

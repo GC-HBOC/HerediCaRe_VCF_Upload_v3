@@ -6,10 +6,12 @@ class VCF:
         self.hg38 = HG38_FLAG
         
         ### further infos required for SQL output
+        self.VCF_NAME = None
         self.MEMBER_ID = None # interne Pat-ID, Teil 2 des Dateinamens
         self.BOGEN_NR = None # MGU Bogennr, Teil 3 des Dateinamens
         self.ERFMIT = None # interne Mitarbeite-ID, Teil 4 des Dateinamens
         self.ERFDAT = None # Zeitstempel des Uploads, Teil 5 des Dateinames
+        self.PARSE_N_IN_SOURCE = None
 
         self.header = [] # list of header lines 
         VARIANT_HEADER = ['chrom', 'pos_hg38', 'ref_hg38', 'alt_hg38', 'pos_hg19', 'ref_hg19', 'alt_hg19', 'gene',  'transcript', 'hgvsc', 'hgvsp', 'effect', 'annotation', 'class', 'gt', 'norm_fail', 'ref_fail', 'liftover_fail']
@@ -35,7 +37,7 @@ class VCF:
                     while REF[0] == ALT[0] and len(REF) > 1 and len(ALT) > 1:
                         REF, ALT = REF[1:], ALT[1:]
                         POS += 1
-                    self.variants.loc[i,'pos_hg38'] = str(POS)
+                    self.variants.loc[i,'pos_hg38'] = str(POS) #XXX
                     self.variants.loc[i,'ref_hg38'] = REF
                     self.variants.loc[i,'alt_hg38'] = ALT
                     self.variants.loc[i, 'norm_fail'] = False
@@ -60,7 +62,7 @@ class VCF:
                     while REF[0] == ALT[0] and len(REF) > 1 and len(ALT) > 1:
                         REF, ALT = REF[1:], ALT[1:]
                         POS += 1
-                    self.variants.loc[i,'pos_hg19'] = str(POS)
+                    self.variants.loc[i,'pos_hg19'] = str(POS) # XXX
                     self.variants.loc[i,'ref_hg19'] = REF
                     self.variants.loc[i,'alt_hg19'] = ALT
                     self.variants.loc[i, 'norm_fail'] = False
@@ -82,7 +84,7 @@ class VCF:
                 CHROM, POS, REF, ALT = 'chr' + self.variants['chrom'][i], int(self.variants['pos_hg38'][i]), self.variants['ref_hg38'][i], self.variants['alt_hg38'][i]  
             else:
                 CHROM, POS, REF, ALT = 'chr' + self.variants['chrom'][i], int(self.variants['pos_hg19'][i]), self.variants['ref_hg19'][i], self.variants['alt_hg19'][i] 
-            print(CHROM, POS, REF, ALT)
+            #print(CHROM, POS, REF, ALT)
             CHAIN_FLAG = False
             self.variants.loc[i,'liftover_fail'] = True
             #print(self.variants)
@@ -113,11 +115,11 @@ class VCF:
                                 #print('QUERY_SEQ', QUERY_SEQ)
                                 if QUERY_SEQ == REF.upper():
                                     if self.hg38:
-                                        self.variants.loc[i,'pos_hg19'] = QUERY_POS
+                                        self.variants.loc[i,'pos_hg19'] = str(QUERY_POS)
                                         self.variants.loc[i,'ref_hg19'] = REF
                                         self.variants.loc[i, 'alt_hg19'] = ALT
                                     else:
-                                        self.variants.loc[i,'pos_hg38'] = QUERY_POS
+                                        self.variants.loc[i,'pos_hg38'] = str(QUERY_POS)
                                         self.variants.loc[i,'ref_hg38'] = REF
                                         self.variants.loc[i, 'alt_hg38'] = ALT
                                     self.variants.loc[i,'liftover_fail'] = False
@@ -136,11 +138,11 @@ class VCF:
                                 #print('QUERY_SEQ', QUERY_SEQ)
                                 if QUERY_SEQ == REF.upper():
                                     if self.hg38:
-                                        self.variants.loc[i,'pos_hg19'] = QUERY_POS
+                                        self.variants.loc[i,'pos_hg19'] = str(QUERY_POS)
                                         self.variants.loc[i,'ref_hg19'] = REF
                                         self.variants.loc[i, 'alt_hg19'] = ALT
                                     else:
-                                        self.variants.loc[i,'pos_hg38'] = QUERY_POS
+                                        self.variants.loc[i,'pos_hg38'] = str(QUERY_POS)
                                         self.variants.loc[i,'ref_hg38'] = REF
                                         self.variants.loc[i, 'alt_hg38'] = ALT
                                     self.variants.loc[i,'liftover_fail'] = False
@@ -156,7 +158,9 @@ class VCF:
 
     def write_sql_output(self, outpath):
 
-        LINE_PREFIX = "into VCF_UPLOAD (MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT,GEN2,REFSEQ,HGVS_DNA,HGVS_PROT,ART,PATH,CHROM,POS_HG19,REF_HG19,ALT_HG19,POS_HG38,REF_HG38,ALT_HG38,ZYGOT) values"
+
+        db_entries = '(UPLDATEI,MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT, GEN2,REFSEQ,HGVS_DNA,HGVS_PROT,ART,PATH,CHROM,POS_HG19,REF_HG19,ALT_HG19,POS_HG38,REF_HG38,ALT_HG38,ZYGOT,PARSE_N_IN_SOURCE,PARSE_N_PROCESSED,ERROR_SHORT,ERROR_TEXT)'
+        LINE_PREFIX = "into VCF_UPLOAD " + db_entries + " values"
         with open(outpath, 'w') as outfile:
             
             outfile.write("Insert all\n")
@@ -168,11 +172,16 @@ class VCF:
                     _var = '-'.join([self.variants.loc[_ind,'chrom'], self.variants.loc[_ind,'pos_hg38'],self.variants.loc[_ind,'ref_hg38'], self.variants.loc[_ind,'alt_hg38'] ])
                 else:
                     _var = '-'.join([self.variants.loc[_ind,'chrom'], self.variants.loc[_ind,'pos_hg19'],self.variants.loc[_ind,'ref_hg19'], self.variants.loc[_ind,'alt_hg19'] ])
-                OUT = "into VCF_UPLOAD (MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT,GEN2,HGVS_DNA) values ("
-                OUT += ','.join([self.MEMBER_ID, self.BOGEN_NR, self.ERFMIT, self.ERFDAT, "\'STATUS\'", "\'Reference check failed for variant " + _var + "\'"]) + ')\n'
+
+                ENTRY_LIST = [self.VCF_NAME,self.MEMBER_ID, self.BOGEN_NR, self.ERFMIT, self.ERFDAT] # UPLDATEI,MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT,
+                ENTRY_LIST = ENTRY_LIST + ['###','###','###','###','###','###','###','###','###','###','###','###','###','###'] # GEN2,REFSEQ,HGVS_DNA,HGVS_PROT,ART,PATH,CHROM,POS_HG19,REF_HG19,ALT_HG19,POS_HG38,REF_HG38,ALT_HG38,ZYGOT
+                ENTRY_LIST = ENTRY_LIT + [self.PARSE_N_IN_SOURCE,0,"\'REF_CHECK_FAIL\'", "\'Reference check failed for variant " + _var + "\'" ] # PARSE_N_IN_SOURCE,PARSE_N_PROCESSED,ERROR_SHORT,ERROR_TEXT
+                OUT = "into VCF_UPLOAD " + db_entries + " values ("
+
+                OUT += ','.join([str(_) for _ in ENTRY_LIST]) + ')\n'
                 outfile.write(OUT)
             
-            ## there are variants to report!! Yippiie!!
+            ## there are variants to report!!
             elif len(self.variants.loc[(self.variants['norm_fail'] == False) & (self.variants['liftover_fail'] == False) & (self.variants['gene'].notna()) ]):
                 pass
 
