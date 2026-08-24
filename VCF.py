@@ -1,20 +1,28 @@
 import pandas as pd
 import os
+from datetime import datetime
 
 class VCF:
-    def __init__(self, HG38_FLAG):
+
+    def __init__(self, HG38_FLAG, VERSION):
         self.hg38 = HG38_FLAG
-        
-        ### further infos required for SQL output
+
+
+        self.VERSION = VERSION
+        ### infos for VCF_UPLOAD_META
         self.VCF_NAME = None
         self.MEMBER_ID = None # interne Pat-ID, Teil 2 des Dateinamens
         self.BOGEN_NR = None # MGU Bogennr, Teil 3 des Dateinamens
         self.ERFMIT = None # interne Mitarbeite-ID, Teil 4 des Dateinamens
         self.ERFDAT = None # Zeitstempel des Uploads, Teil 5 des Dateinames
+        self.ERROR = []
+        self.ERROR_LONG = []
+        
         self.PARSE_N_IN_SOURCE = None
 
         self.header = [] # list of header lines 
-        VARIANT_HEADER = ['chrom', 'pos_hg38', 'ref_hg38', 'alt_hg38', 'pos_hg19', 'ref_hg19', 'alt_hg19', 'gene',  'transcript', 'hgvsc', 'hgvsp', 'effect', 'annotation', 'class', 'gt', 'norm_fail', 'ref_fail', 'liftover_fail']
+        # lid = line ID, is required to calculate PARSE_ROWS_PROCESSED in final output
+        VARIANT_HEADER = ['chrom', 'pos_hg38', 'ref_hg38', 'alt_hg38', 'pos_hg19', 'ref_hg19', 'alt_hg19', 'gene',  'transcript', 'hgvsc', 'hgvsp', 'effect', 'annotation', 'class', 'gt', 'norm_fail', 'ref_fail', 'liftover_fail', 'lid']
         self.variants = pd.DataFrame(columns=VARIANT_HEADER)
     
     def normalize(self, seq_dict):
@@ -200,3 +208,28 @@ class VCF:
 
             outfile.write("select * from dual;\n")
             outfile.write("commit;\n")
+
+    def write_sql_meta_output(self, outpath):
+
+        # check if (and how many) variants could be processed
+        if self.variants['ref_fail'].any():
+            PARSE_RESULT = '0'
+        elif len(self.variants.loc[(self.variants['norm_fail'] == False) & (self.variants['liftover_fail'] == False) & (self.variants['gene'].notna()) ]):
+            PARSE_RESULT = '1'
+        else:
+            PARSE_RESULT = '0'
+
+        db_entries = '(UPLDATEI,MEMBER_ID,EVENT,ERFMIT,ERFDAT,REFGEN_UPLOAD,PARSE_DATE,PARSE_VERSION,PARSE_RESULT,PARSE_ROWS_IM_SOURCE,PARSE_ROWS_PROCESSED,PARSE_VARS_PROCESSED,ERROR_SHORT,ERROR_TEXT)'
+        with open(outpath, 'w') as outfile:
+            outfile.write("Insert Into VCF_UPLOAD_META " + db_entries + " Values ('")
+            REFGEN = 'hg38' if self.hg38 else 'hg19'
+            outfile.write(', '. join([self.VCF_NAME + "'", self.MEMBER_ID, self.BOGEN_NR, self.ERFMIT, "to_date('" + self.ERFDAT + "', 'dd.mm.yyyy hh24:mi:ss')", REFGEN, "to_date('" +  datetime.now().strftime("%Y%m%d%H%M%S") + "', 'dd.mm.yyyy hh24:mi:ss')" , "'"+ self.VERSION + "'"] ) + ',')
+            NVAR = len(self.variants.loc[(self.variants['norm_fail'] == False) & (self.variants['liftover_fail'] == False) & (self.variants['gene'].notna())]) 
+            if not len(self.ERROR):
+                outfile.write(', '. join([PARSE_RESULT, str(self.PARSE_N_IN_SOURCE), str(len(self.variants['lid'].unique())), str(NVAR), "'###'", "'###'" ]))
+            else:
+            
+                outfile.write(', '. join([PARSE_RESULT, str(self.PARSE_N_IN_SOURCE), str(len(self.variants['lid'].unique())), str(NVAR), "'" + ';'.join(self.ERROR) + "'", "'" + ';'.join(self.ERROR_LONG) + "'" ]))
+            outfile.write(")\n")
+
+

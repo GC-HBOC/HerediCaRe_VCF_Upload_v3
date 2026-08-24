@@ -9,6 +9,9 @@ from VCF import VCF
 import re
 import fastapy
 
+
+VERSION = "1.0.0"
+
 SRC_DIR = os.path.dirname(os.path.realpath(__file__))
 
 parser = argparse.ArgumentParser()
@@ -76,30 +79,27 @@ for VCF_FILE in VCFS:
         print(VCF_FILE, encoding)
         #print(VCF)
         HG38_FLAG = False if VCF_FILE.startswith('hg19-') else True
-
-
-
         
         
 
         ## normalize VCF: ends up with a normalized hg38 VCF file in vcf_Normalisiert 
         if HG38_FLAG:
-            vcf = VCF(True)
+            vcf = VCF(True, VERSION=VERSION)
             #normalize_vcf(os.path.join(args.input_folder, VCF), hg38_dict, HG38_FLAG)
         if not HG38_FLAG:
-            vcf = VCF(False)
+            vcf = VCF(False, VERSION=VERSION)
             #normalize_vcf(os.path.join(args.input_folder, VCF), hg19_dict, HG38_FLAG)
 
         ### further infos required for SQL output
+        #hg38-2155522-1-2026-20180910134119.vcf
         vcf.VCF_NAME = VCF_FILE
         vcf.MEMBER_ID = VCF_FILE.split('-')[1]
         vcf.BOGEN_NR = VCF_FILE.split('-')[2]
         vcf.ERFMIT =  VCF_FILE.split('-')[3]
-        vcf.ERFDAT =  VCF_FILE.split('-')[3]
+        vcf.ERFDAT =  VCF_FILE.split('-')[4].split('.')[0]
 
 
-
-        VAR_COUNTER = 0
+        LINE_COUNTER, PROCESSED_COUNTER, LID = 0, 0, 0
         with open(os.path.join(args.input_folder, VCF_FILE), encoding=chardet.detect(rawdata)['encoding']) as infile:
             FAIL_FLAG = False
             for _l in infile:
@@ -109,11 +109,13 @@ for VCF_FILE in VCFS:
                         vcf.header.append(line)
                         #try:
                     else:
-                        VAR_COUNTER +=1
+                        LINE_COUNTER +=1
                         ll = line.rstrip().split('\t')
                         if len(ll) not in [8, 10]:
                             sys.stderr.write('...invalid number of columns in VCF file ' + VCF_FILE + ': ' + str(len(ll)) + '\n')
                             FAIL_FLAG = True
+                            vcf.ERROR.append('INVALID_NUMBER_OF_COLUMNS')
+                            vcf.ERROR_LONG.append('INVALID_NUMBER_OF_COLUMNS: ' + l)
                             break
                         try:
                             CHROM, POS, REF, ALT, INFO = ll[0], ll[1], ll[3], ll[4], ll[7]
@@ -138,6 +140,8 @@ for VCF_FILE in VCFS:
                             if len(ANNOT.split(',')) != nalt:
                                 sys.stderr.write('...unable to parse annotation for variant ' + '-'.join([CHROM,POS,REF,ALT]) + ' in VCF file ' + VCF_FILE + '\n')
                                 FAIL_FLAG = True
+                                vcf.ERROR.append('ANNOTATION_PARSE_ERROR')
+                                vcf.ERROR_LONG.append('ANNOTAION_PARSE_ERROR for variant' + '-'.join([CHROM,POS,REF,ALT]) )
                         
                         
                         ## split variant in single-ALT variants
@@ -157,24 +161,32 @@ for VCF_FILE in VCFS:
                                             ## TODO REF check
                                             if REF.upper() == hg38_dict[CHROM][int(POS)-1:int(POS)+len(REF)-1].upper():
                                             
-                                                VAR = [CHROM, POS, REF, _ALT, None, None, None, None, None, None, None, None, ANNOT_TAG, varclass, GT, None, False, None]
+                                                VAR = [CHROM, POS, REF, _ALT, None, None, None, None, None, None, None, None, ANNOT_TAG, varclass, GT, None, False, None, LID]
                                             else:
-                                                VAR = [CHROM, POS, REF, _ALT, None, None, None, None, None, None, None, None, ANNOT_TAG, varclass, GT, None, True, None]
+                                                VAR = [CHROM, POS, REF, _ALT, None, None, None, None, None, None, None, None, ANNOT_TAG, varclass, GT, None, True, None, LID]
                                         else:
                                             if REF.upper() == hg19_dict[CHROM][int(POS)-1:int(POS)+len(REF)-1].upper():
-                                                VAR = [CHROM, None, None, None, POS, REF, _ALT, None, None, None, None, None, ANNOT_TAG, varclass, GT, None, False, None]
+                                                VAR = [CHROM, None, None, None, POS, REF, _ALT, None, None, None, None, None, ANNOT_TAG, varclass, GT, None, False, None, LID]
                                             else:
-                                                VAR = [CHROM, None, None, None, POS, REF, _ALT, None, None, None, None, None, ANNOT_TAG, varclass, GT, None, True, None]
+                                                VAR = [CHROM, None, None, None, POS, REF, _ALT, None, None, None, None, None, ANNOT_TAG, varclass, GT, None, True, None, LID]
                                         vcf.variants.loc[len(vcf.variants)] = VAR
                                     else:
                                         sys.stderr.write("Variant with ALT " + _ALT + " at " + CHROM + ':' + str(POS) + ' is ignored\n')
+                        LID +=1
 
         print(vcf.variants)
         print('FAIL_FLAG:', FAIL_FLAG)
-        vcf.PARSE_N_IN_SOURCE =  VAR_COUNTER
+        vcf.PARSE_N_IN_SOURCE =  LINE_COUNTER
         
         # set FAIL_FLAG if any ref_fail == True
-        if vcf.variants['ref_fail'].any(): FAIL_FLAG = True
+        if vcf.variants['ref_fail'].any(): 
+            FAIL_FLAG = True
+            vcf.ERROR.append('REF_FAIL_ERROR')
+            tmp = vcf.variants.loc[vcf.variants['ref_fail']==True]
+            if not vcf.hg38:
+                vcf.ERROR_LONG.append('REF_FAIL_ERROR for variant ' + '-'.join([str(tmp['chrom'][0]), str(tmp['pos_hg19'][0]) , tmp['ref_hg19'][0], tmp['alt_hg19'][0]]) )
+            else:
+                vcf.ERROR_LONG.append('REF_FAIL_ERROR for variant ' + '-'.join([str(tmp['chrom'][0]), str(tmp['pos_hg38'][0]) , tmp['ref_hg38'][0], tmp['alt_hg38'][0]]) )
             
         ### NORMALIZATION
         if HG38_FLAG:
@@ -296,4 +308,5 @@ for VCF_FILE in VCFS:
 
             os.makedirs(args.output_folder, exist_ok=True)
             vcf.write_sql_output(args.output_folder + '/' + VCF_FILE + '.txt')
+            vcf.write_sql_meta_output(args.output_folder + '/' + VCF_FILE + '_meta.txt')
 
