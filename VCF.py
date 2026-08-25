@@ -183,7 +183,7 @@ class VCF:
 
                 ENTRY_LIST = [self.VCF_NAME,self.MEMBER_ID, self.BOGEN_NR, self.ERFMIT, self.ERFDAT] # UPLDATEI,MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT,
                 ENTRY_LIST = ENTRY_LIST + ['###','###','###','###','###','###','###','###','###','###','###','###','###','###'] # GEN2,REFSEQ,HGVS_DNA,HGVS_PROT,ART,PATH,CHROM,POS_HG19,REF_HG19,ALT_HG19,POS_HG38,REF_HG38,ALT_HG38,ZYGOT
-                ENTRY_LIST = ENTRY_LIT + [self.PARSE_N_IN_SOURCE,0,"\'REF_CHECK_FAIL\'", "\'Reference check failed for variant " + _var + "\'" ] # PARSE_N_IN_SOURCE,PARSE_N_PROCESSED,ERROR_SHORT,ERROR_TEXT
+                ENTRY_LIST = ENTRY_LIST + [self.PARSE_N_IN_SOURCE,0,"\'REF_CHECK_FAIL\'", "\'Reference check failed for variant " + _var + "\'" ] # PARSE_N_IN_SOURCE,PARSE_N_PROCESSED,ERROR_SHORT,ERROR_TEXT
                 OUT = "into VCF_UPLOAD " + db_entries + " values ("
 
                 OUT += ','.join([str(_) for _ in ENTRY_LIST]) + ')\n'
@@ -223,7 +223,7 @@ class VCF:
         with open(outpath, 'w') as outfile:
             outfile.write("Insert Into VCF_UPLOAD_META " + db_entries + " Values ('")
             REFGEN = 'hg38' if self.hg38 else 'hg19'
-            outfile.write(', '. join([self.VCF_NAME + "'", self.MEMBER_ID, self.BOGEN_NR, self.ERFMIT, "to_date('" + self.ERFDAT + "', 'dd.mm.yyyy hh24:mi:ss')", REFGEN, "to_date('" +  datetime.now().strftime("%Y%m%d%H%M%S") + "', 'dd.mm.yyyy hh24:mi:ss')" , "'"+ self.VERSION + "'"] ) + ',')
+            outfile.write(', '. join([self.VCF_NAME + "'", self.MEMBER_ID, self.BOGEN_NR, self.ERFMIT, "to_date('" + self.ERFDAT + "', 'dd.mm.yyyy hh24:mi:ss')", REFGEN, "to_date('" +  datetime.now().strftime("%Y%m%d%H%M%S") + "', 'dd.mm.yyyy hh24:mi:ss')" , "'"+ self.VERSION + "'"] ) + ', ')
             NVAR = len(self.variants.loc[(self.variants['norm_fail'] == False) & (self.variants['liftover_fail'] == False) & (self.variants['gene'].notna())]) 
             if not len(self.ERROR):
                 outfile.write(', '. join([PARSE_RESULT, str(self.PARSE_N_IN_SOURCE), str(len(self.variants['lid'].unique())), str(NVAR), "'###'", "'###'" ]))

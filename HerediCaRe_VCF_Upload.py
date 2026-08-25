@@ -115,7 +115,7 @@ for VCF_FILE in VCFS:
                             sys.stderr.write('...invalid number of columns in VCF file ' + VCF_FILE + ': ' + str(len(ll)) + '\n')
                             FAIL_FLAG = True
                             vcf.ERROR.append('INVALID_NUMBER_OF_COLUMNS')
-                            vcf.ERROR_LONG.append('INVALID_NUMBER_OF_COLUMNS: ' + l)
+                            vcf.ERROR_LONG.append('INVALID_NUMBER_OF_COLUMNS: ' + line)
                             break
                         try:
                             CHROM, POS, REF, ALT, INFO = ll[0], ll[1], ll[3], ll[4], ll[7]
@@ -160,7 +160,6 @@ for VCF_FILE in VCFS:
                                         if HG38_FLAG:
                                             ## TODO REF check
                                             if REF.upper() == hg38_dict[CHROM][int(POS)-1:int(POS)+len(REF)-1].upper():
-                                            
                                                 VAR = [CHROM, POS, REF, _ALT, None, None, None, None, None, None, None, None, ANNOT_TAG, varclass, GT, None, False, None, LID]
                                             else:
                                                 VAR = [CHROM, POS, REF, _ALT, None, None, None, None, None, None, None, None, ANNOT_TAG, varclass, GT, None, True, None, LID]
@@ -184,9 +183,9 @@ for VCF_FILE in VCFS:
             vcf.ERROR.append('REF_FAIL_ERROR')
             tmp = vcf.variants.loc[vcf.variants['ref_fail']==True]
             if not vcf.hg38:
-                vcf.ERROR_LONG.append('REF_FAIL_ERROR for variant ' + '-'.join([str(tmp['chrom'][0]), str(tmp['pos_hg19'][0]) , tmp['ref_hg19'][0], tmp['alt_hg19'][0]]) )
+                vcf.ERROR_LONG.append('REF_FAIL_ERROR for variant ' + '-'.join([str(list(tmp['chrom'])[0]), str(list(tmp['pos_hg19'])[0]) , list(tmp['ref_hg19'])[0], list(tmp['alt_hg19'])[0]]) )
             else:
-                vcf.ERROR_LONG.append('REF_FAIL_ERROR for variant ' + '-'.join([str(tmp['chrom'][0]), str(tmp['pos_hg38'][0]) , tmp['ref_hg38'][0], tmp['alt_hg38'][0]]) )
+                vcf.ERROR_LONG.append('REF_FAIL_ERROR for variant ' + '-'.join([str(list(tmp['chrom'])[0]), str(list(tmp['pos_hg38'])[0]) , list(tmp['ref_hg38'])[0], list(tmp['alt_hg38'])[0]]) )
             
         ### NORMALIZATION
         if HG38_FLAG:
@@ -306,7 +305,7 @@ for VCF_FILE in VCFS:
             #vcf.variants.to_csv('test.tsv', sep='\t', index=False)
             print(vcf.variants)
 
-            os.makedirs(args.output_folder, exist_ok=True)
-            vcf.write_sql_output(args.output_folder + '/' + VCF_FILE + '.txt')
-            vcf.write_sql_meta_output(args.output_folder + '/' + VCF_FILE + '_meta.txt')
+        os.makedirs(args.output_folder, exist_ok=True)
+        vcf.write_sql_output(args.output_folder + '/' + VCF_FILE + '.txt')
+        vcf.write_sql_meta_output(args.output_folder + '/' + VCF_FILE + '_meta.txt')
 
