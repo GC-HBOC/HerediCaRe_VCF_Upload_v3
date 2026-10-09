@@ -182,7 +182,7 @@ class VCF:
         # In der bereits vorhandenen Tabelle VCF_UPLOAD haben wir folgende 2 Felder ergänzt:
             #PARSE_SUCCESFULL als einstelliges Zahlenfeld, zu befüllen mit 1 wenn die Verarbeitung erfolgreich war sonst 0.
             #ERROR_MSG als Textfeld (max 4000 Zeichen), zu Befüllen mit Fehlermeldung wenn die Verarbeitung nicht erfolgreich war
-        db_entries_var = '(MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT, GEN2,REFSEQ,HGVS_DNA,HGVS_PROT,ART,PATH,CHROM,POS_HG19,REF_HG19,ALT_HG19,POS_HG38,REF_HG38,ALT_HG38,ZYGOT,PARSE_SUCCESFUL,ERROR_MSG)'
+        db_entries_var = '(MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT, GEN2,REFSEQ,HGVS_DNA,HGVS_PROT,ART,PATH,CHROM,POS_HG19,REF_HG19,ALT_HG19,POS_HG38,REF_HG38,ALT_HG38,ZYGOT,PARSE_SUCCESSFUL,ERROR_MSG)'
         var_line_prefix =  "into VCF_UPLOAD " + db_entries_var + " values (" + ','.join([self.MEMBER_ID,self.BOGEN_NR,self.ERFMIT]) + ','
         
         with open(outpath, 'w') as outfile:
@@ -216,7 +216,7 @@ class VCF:
 
                 for i in range(len(self.variants)):
                     tmp_var = self.variants.loc[i,:]
-                    # '(MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT, GEN2,REFSEQ,HGVS_DNA,HGVS_PROT,ART,PATH,CHROM,POS_HG19,REF_HG19,ALT_HG19,POS_HG38,REF_HG38,ALT_HG38,ZYGOT,PARSE_SUCCESFUL,ERROR_MSG)'
+                    # '(MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT, GEN2,REFSEQ,HGVS_DNA,HGVS_PROT,ART,PATH,CHROM,POS_HG19,REF_HG19,ALT_HG19,POS_HG38,REF_HG38,ALT_HG38,ZYGOT,PARSE_SUCCESSFUL,ERROR_MSG)'
                     if tmp_var['norm_fail']:
                         pass
                     elif tmp_var['liftover_fail']:
