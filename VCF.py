@@ -84,7 +84,8 @@ class VCF:
         # DEBUG: https://liftover.broadinstitute.org/
         # TODO: reverse query sequence in chain specification
         
-        SRC_DIR = os.path.dirname(os.path.realpath(__file__))
+        #SRC_DIR = os.path.dirname(os.path.realpath(__file__))
+        SRC_DIR = os.getcwd()
         CHAIN_FILE = SRC_DIR + '\\' + 'resources/hg38ToHg19.over.chain' if self.hg38 else SRC_DIR + '\\' + r'resources/hg19ToHg38.over.chain'
         
         for i in range(len(self.variants)):
@@ -167,13 +168,185 @@ class VCF:
     def write_sql_output(self, outpath):
 
 
-        db_entries = '(UPLDATEI,MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT, GEN2,REFSEQ,HGVS_DNA,HGVS_PROT,ART,PATH,CHROM,POS_HG19,REF_HG19,ALT_HG19,POS_HG38,REF_HG38,ALT_HG38,ZYGOT,PARSE_N_IN_SOURCE,PARSE_N_PROCESSED,ERROR_SHORT,ERROR_TEXT)'
-        LINE_PREFIX = "into VCF_UPLOAD " + db_entries + " values"
-        with open(outpath, 'w') as outfile:
-            
-            outfile.write("Insert all\n")
+        ###  write meta output
+        # check if (and how many) variants could be processed
+        if self.variants['ref_fail'].any():
+            PARSE_RESULT = '0'
+            print('PARSE_RESULT ref_fail') #DEBUG
+        elif len(self.variants.loc[(self.variants['norm_fail'] == False) & (self.variants['liftover_fail'] == False) & (self.variants['gene'].notna()) ]):
+            PARSE_RESULT = '1'
+        else:
+            PARSE_RESULT = '0'
 
-            ## REF check failed
+        db_entries_meta = '(UPLDATEI,MEMBER_ID,EVENT,ERFMIT,ERFDAT,REFGEN_UPLOAD,PARSE_DATE,PARSE_VERSION,PARSE_RESULT,PARSE_ROWS_IN_SOURCE,PARSE_ROWS_PROCESSED,PARSE_VARS_PROCESSED,ERROR_SHORT,ERROR_TEXT)'
+        # In der bereits vorhandenen Tabelle VCF_UPLOAD haben wir folgende 2 Felder ergänzt:
+            #PARSE_SUCCESFULL als einstelliges Zahlenfeld, zu befüllen mit 1 wenn die Verarbeitung erfolgreich war sonst 0.
+            #ERROR_MSG als Textfeld (max 4000 Zeichen), zu Befüllen mit Fehlermeldung wenn die Verarbeitung nicht erfolgreich war
+        db_entries_var = '(MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT, GEN2,REFSEQ,HGVS_DNA,HGVS_PROT,ART,PATH,CHROM,POS_HG19,REF_HG19,ALT_HG19,POS_HG38,REF_HG38,ALT_HG38,ZYGOT,PARSE_SUCCESFUL,ERROR_MSG)'
+        var_line_prefix =  "into VCF_UPLOAD " + db_entries_var + " values (" + ','.join([self.MEMBER_ID,self.BOGEN_NR,self.ERFMIT]) + ','
+        
+        with open(outpath, 'w') as outfile:
+            outfile.write("Insert Into VCF_UPLOAD_META " + db_entries_meta + " Values ('")
+            REFGEN = 'hg38' if self.hg38 else 'hg19'
+            
+            # to_date('13490910134119', 'dd.mm.yyyy hh24:mi:ss') => TO_DATE( '10.09.1349 13:41:19', 'dd.mm.yyyy hh24:mi:ss') # email from August 25, 26
+            ERFDAT_str = '.'.join([self.ERFDAT[6:8], self.ERFDAT[4:6], self.ERFDAT[:4]]) + ' ' + ':'.join([ self.ERFDAT[8:10], self.ERFDAT[10:12], self.ERFDAT[12:14] ])
+
+            #outfile.write(', '. join([self.VCF_NAME + "'", self.MEMBER_ID, self.BOGEN_NR, self.ERFMIT, "to_date('" + self.ERFDAT + "', 'dd.mm.yyyy hh24:mi:ss')", REFGEN, "to_date('" +  datetime.now().strftime("%Y%m%d%H%M%S") + "', 'dd.mm.yyyy hh24:mi:ss')" , "'"+ self.VERSION + "'"] ) + ', ')
+            outfile.write(', '. join([self.VCF_NAME + "'", self.MEMBER_ID, self.BOGEN_NR, self.ERFMIT, "to_date('" + ERFDAT_str + "', 'dd.mm.yyyy hh24:mi:ss')", REFGEN, "to_date('" +  datetime.now().strftime("%d.%m.%Y %H%M%S") + "', 'dd.mm.yyyy hh24:mi:ss')" , "'"+ self.VERSION + "'"] ) + ', ')
+            NVAR = len(self.variants.loc[(self.variants['norm_fail'] == False) & (self.variants['liftover_fail'] == False) & (self.variants['gene'].notna())]) 
+            if not len(self.ERROR):
+                outfile.write(', '. join([PARSE_RESULT, str(self.PARSE_N_IN_SOURCE), str(len(self.variants['lid'].unique())), str(NVAR), "'###'", "'###'" ]))
+            else:
+            
+                outfile.write(', '. join([PARSE_RESULT, str(self.PARSE_N_IN_SOURCE), str(len(self.variants['lid'].unique())), str(NVAR), "'" + ';'.join(self.ERROR) + "'", "'" + ';'.join(self.ERROR_LONG) + "'" ]))
+            outfile.write(")\n\n")
+
+
+
+        ### write variant output
+        #db_entries = '(UPLDATEI,MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT, GEN2,REFSEQ,HGVS_DNA,HGVS_PROT,ART,PATH,CHROM,POS_HG19,REF_HG19,ALT_HG19,POS_HG38,REF_HG38,ALT_HG38,ZYGOT,PARSE_N_IN_SOURCE,PARSE_N_PROCESSED,ERROR_SHORT,ERROR_TEXT)'
+        # LINE_PREFIX = "into VCF_UPLOAD " + db_entries_var + " values"
+        
+            print('PARSE_RESULT', PARSE_RESULT)
+
+            if PARSE_RESULT == '1':
+                outfile.write("Insert all\n")
+
+
+                for i in range(len(self.variants)):
+                    tmp_var = self.variants.loc[i,:]
+                    # '(MEMBER_ID,BOGEN_NR,ERFMIT,ERFDAT, GEN2,REFSEQ,HGVS_DNA,HGVS_PROT,ART,PATH,CHROM,POS_HG19,REF_HG19,ALT_HG19,POS_HG38,REF_HG38,ALT_HG38,ZYGOT,PARSE_SUCCESFUL,ERROR_MSG)'
+                    if tmp_var['norm_fail']:
+                        pass
+                    elif tmp_var['liftover_fail']:
+                        pass
+                    else:
+                        VAR_ENTRIES = ["'" + _ + "'" for _ in [tmp_var['gene'],tmp_var['transcript'], tmp_var['hgvsc'] ]]
+                        if tmp_var['hgvsp']: VAR_ENTRIES.append("'" + tmp_var['hgvsp'] +"'")
+                        else: VAR_ENTRIES.append("'###'")
+                        VAR_ENTRIES.append("'" + tmp_var['effect'] +"'")
+
+                        annerr = ''
+                        if tmp_var['annotation']:
+                            # TODO set WARNING/ERROR (annerr) in MSG
+                            annot, annerr = VCF.return_path_class(str(tmp_var['annotation']), str(tmp_var['class']))
+                            print(str(tmp_var['annotation']), str(tmp_var['class']), ':', annot, annerr)
+                            if annot and not annerr:
+                                VAR_ENTRIES.append("'" + str(annot) + "'")
+                            else:
+                                 VAR_ENTRIES.append("'###'")
+                        else:
+                            VAR_ENTRIES.append("'###'")
+                        VAR_ENTRIES.append(str(tmp_var['chrom']) )
+                        ### XXX should not happen that POS, REF, ALT unavailable
+                        if tmp_var['pos_hg19']:
+                            VAR_ENTRIES.append(str(tmp_var['pos_hg19']) )
+                        else: VAR_ENTRIES.append("'###'")
+                        if tmp_var['ref_hg19']:
+                            VAR_ENTRIES.append("'" + str(tmp_var['ref_hg19']) + "'" )
+                        else: VAR_ENTRIES.append("'###'")
+                        if tmp_var['alt_hg19']:
+                            VAR_ENTRIES.append("'" + str(tmp_var['alt_hg19']) + "'")
+                        else: VAR_ENTRIES.append("'###'")
+                        if tmp_var['pos_hg38']:
+                            VAR_ENTRIES.append(str(tmp_var['pos_hg38']) )
+                        else: VAR_ENTRIES.append("'###'")
+                        if tmp_var['ref_hg38']:
+                            VAR_ENTRIES.append("'" + str(tmp_var['ref_hg38'])  + "'")
+                        else: VAR_ENTRIES.append("'###'")
+                        if tmp_var['alt_hg38']:
+                            VAR_ENTRIES.append("'" + str(tmp_var['alt_hg38'])  + "'")
+                        else: VAR_ENTRIES.append("'###'")
+                        
+                        gterr = ''
+                        if tmp_var['gt']:
+                            if tmp_var['gt'] == 1:
+                                VAR_ENTRIES.append("'" + '0/1' + "'")
+                            elif tmp_var['gt'] == 2:
+                                VAR_ENTRIES.append("'" + '1/1' + "'")
+                            else:
+                                gterr = 'GT=' + str(tmp_var['gt']) + '?'
+                        else:
+                            VAR_ENTRIES.append("'###'")
+                        
+
+
+                        if annerr or gterr:
+                            VAR_ENTRIES.append(str(0))
+                            VAR_ENTRIES.append("'" + ';'.join([_ for _ in [annerr, gterr] if _ != '']) + "'")
+                        else:
+                            VAR_ENTRIES.append(str(1))
+                            VAR_ENTRIES.append("'###'")
+
+                    outfile.write(var_line_prefix + ','.join(VAR_ENTRIES))
+
+
+                    outfile.write(')\n')
+
+
+                outfile.write("select * from dual;\n")
+                outfile.write("commit;\n")
+
+    @staticmethod
+    def return_path_class(annot, pathclass):
+        if annot == "MT":
+            if pathclass == "BEN":
+                return (1, '')
+            elif pathclass == "LBEN":
+                return (2, '')
+            elif pathclass == "UI":
+                return (3,'')
+            elif pathclass == "LPAT":
+                return (4,'')
+            elif pathclass == "PAT":
+                return (5,'')
+            elif pathclass == "UD":
+                return ('','') # keine Angabe
+            else:
+                return ('', 'Unknown tag for MT annotation of pathogenicity: ' + pathclass)
+        
+        elif annot == "MutDB:Classification":
+            if pathclass == "benign":
+                return (1, '')
+            elif pathclass == "likely benign":
+                return (2, '')
+            elif pathclass == "uncertain significance":
+                return (3,'')
+            elif pathclass == "likely pathogenic":
+                return (4,'')
+            elif pathclass == "pathogenic":
+                return (5,'')
+            elif pathclass == "undefined":
+                return ('','') # keine Angabe
+            else:
+                return ('', 'Unknown tag for MT annotation of pathogenicity: ' + pathclass)
+
+        elif annot == "CLASS":
+            if pathclass == "1":
+                return (1, '')
+            elif pathclass == "1":
+                return (2, '')
+            elif pathclass == "3":
+                return (3,'')
+            elif pathclass == "4":
+                return (4,'')
+            elif pathclass == "5":
+                return (5,'')
+            elif pathclass == "":
+                return ('','') # keine Angabe
+            else:
+                return ('', 'Unknown tag for CLASS annotation of pathogenicity: ' + pathclass)
+
+        else:
+            return('', 'Unknown tag for pathogenicity annotation: ' + pathclass )
+
+            
+
+
+
+
+"""             ## REF check failed
             if self.variants['ref_fail'].any():
                 _ind = self.variants.loc[self.variants['ref_fail'] == True].index[0]
                 if self.hg38:
@@ -207,9 +380,9 @@ class VCF:
 
 
             outfile.write("select * from dual;\n")
-            outfile.write("commit;\n")
+            outfile.write("commit;\n") """
 
-    def write_sql_meta_output(self, outpath):
+"""     def write_sql_meta_output(self, outpath):
 
         # check if (and how many) variants could be processed
         if self.variants['ref_fail'].any():
@@ -219,17 +392,22 @@ class VCF:
         else:
             PARSE_RESULT = '0'
 
-        db_entries = '(UPLDATEI,MEMBER_ID,EVENT,ERFMIT,ERFDAT,REFGEN_UPLOAD,PARSE_DATE,PARSE_VERSION,PARSE_RESULT,PARSE_ROWS_IM_SOURCE,PARSE_ROWS_PROCESSED,PARSE_VARS_PROCESSED,ERROR_SHORT,ERROR_TEXT)'
+        db_entries = '(UPLDATEI,MEMBER_ID,EVENT,ERFMIT,ERFDAT,REFGEN_UPLOAD,PARSE_DATE,PARSE_VERSION,PARSE_RESULT,PARSE_ROWS_IN_SOURCE,PARSE_ROWS_PROCESSED,PARSE_VARS_PROCESSED,ERROR_SHORT,ERROR_TEXT)'
         with open(outpath, 'w') as outfile:
             outfile.write("Insert Into VCF_UPLOAD_META " + db_entries + " Values ('")
             REFGEN = 'hg38' if self.hg38 else 'hg19'
-            outfile.write(', '. join([self.VCF_NAME + "'", self.MEMBER_ID, self.BOGEN_NR, self.ERFMIT, "to_date('" + self.ERFDAT + "', 'dd.mm.yyyy hh24:mi:ss')", REFGEN, "to_date('" +  datetime.now().strftime("%Y%m%d%H%M%S") + "', 'dd.mm.yyyy hh24:mi:ss')" , "'"+ self.VERSION + "'"] ) + ', ')
+            
+            # to_date('13490910134119', 'dd.mm.yyyy hh24:mi:ss') => TO_DATE( '10.09.1349 13:41:19', 'dd.mm.yyyy hh24:mi:ss') # email from August 25, 26
+            ERFDAT_str = '.'.join([self.ERFDAT[6:8], self.ERFDAT[4:6], self.ERFDAT[:4]]) + ' ' + ':'.join([ self.ERFDAT[8:10], self.ERFDAT[10:12], self.ERFDAT[12:14] ])
+
+            #outfile.write(', '. join([self.VCF_NAME + "'", self.MEMBER_ID, self.BOGEN_NR, self.ERFMIT, "to_date('" + self.ERFDAT + "', 'dd.mm.yyyy hh24:mi:ss')", REFGEN, "to_date('" +  datetime.now().strftime("%Y%m%d%H%M%S") + "', 'dd.mm.yyyy hh24:mi:ss')" , "'"+ self.VERSION + "'"] ) + ', ')
+            outfile.write(', '. join([self.VCF_NAME + "'", self.MEMBER_ID, self.BOGEN_NR, self.ERFMIT, "to_date('" + ERFDAT_str + "', 'dd.mm.yyyy hh24:mi:ss')", REFGEN, "to_date('" +  datetime.now().strftime("%d.%m.%Y %H%M%S") + "', 'dd.mm.yyyy hh24:mi:ss')" , "'"+ self.VERSION + "'"] ) + ', ')
             NVAR = len(self.variants.loc[(self.variants['norm_fail'] == False) & (self.variants['liftover_fail'] == False) & (self.variants['gene'].notna())]) 
             if not len(self.ERROR):
                 outfile.write(', '. join([PARSE_RESULT, str(self.PARSE_N_IN_SOURCE), str(len(self.variants['lid'].unique())), str(NVAR), "'###'", "'###'" ]))
             else:
             
                 outfile.write(', '. join([PARSE_RESULT, str(self.PARSE_N_IN_SOURCE), str(len(self.variants['lid'].unique())), str(NVAR), "'" + ';'.join(self.ERROR) + "'", "'" + ';'.join(self.ERROR_LONG) + "'" ]))
-            outfile.write(")\n")
+            outfile.write(")\n") """
 
 

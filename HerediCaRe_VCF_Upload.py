@@ -267,7 +267,7 @@ for VCF_FILE in VCFS:
                                 
                             #TODO variant not found or doubled            
                 
-                print(IND_DICT)
+                #print(IND_DICT)
 
                 ### treat variants located in different genes or transcripts
                 _N = len(vcf.variants)
@@ -307,5 +307,5 @@ for VCF_FILE in VCFS:
 
         os.makedirs(args.output_folder, exist_ok=True)
         vcf.write_sql_output(args.output_folder + '/' + VCF_FILE + '.txt')
-        vcf.write_sql_meta_output(args.output_folder + '/' + VCF_FILE + '_meta.txt')
+        #vcf.write_sql_meta_output(args.output_folder + '/' + VCF_FILE + '_meta.txt')
 
